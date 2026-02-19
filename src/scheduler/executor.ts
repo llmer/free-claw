@@ -4,8 +4,11 @@
  */
 
 import type { Bot } from "grammy";
+import { config } from "../config.js";
 import { runClaude } from "../runner/claude-cli.js";
 import { chunkText } from "../telegram/streaming.js";
+import { ensureWorkspace, loadIdentityFiles } from "../workspace/bootstrap.js";
+import { buildSystemPrompt } from "../workspace/system-prompt.js";
 import type { ScheduledJob } from "./types.js";
 
 export type ExecutorDeps = {
@@ -35,6 +38,11 @@ export async function executeScheduledJob(
   }
 
   try {
+    // Ensure workspace exists and build identity-aware system prompt
+    await ensureWorkspace(config.workspaceDir);
+    const identity = await loadIdentityFiles(config.workspaceDir);
+    const appendSystemPrompt = buildSystemPrompt(identity, config.workspaceDir);
+
     const result = await runClaude({
       prompt: job.prompt,
       sessionId,
@@ -42,6 +50,7 @@ export async function executeScheduledJob(
       workDir: job.workDir,
       mcpConfigPath: deps.mcpConfigPath,
       timeoutMs: JOB_TIMEOUT_MS,
+      appendSystemPrompt,
     });
 
     // Deliver result to Telegram

@@ -9,6 +9,8 @@ export type ChatSession = {
   lastMessageAt: string;
   /** Number of messages exchanged in this session. */
   messageCount: number;
+  /** Whether the onboarding ritual has been completed. */
+  onboardingComplete?: boolean;
 };
 
 export type TaskRun = {

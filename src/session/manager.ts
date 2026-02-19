@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import { config } from "../config.js";
 import { runClaude, type RunClaudeResult } from "../runner/claude-cli.js";
 import { cancelProcess, isRunning } from "../runner/process-manager.js";
+import { ensureWorkspace, loadIdentityFiles, isOnboardingComplete } from "../workspace/bootstrap.js";
+import { buildSystemPrompt } from "../workspace/system-prompt.js";
 import { getSession, putSession } from "./store.js";
 import { enqueue } from "./queue.js";
 import type { ChatSession } from "./types.js";
@@ -22,6 +24,8 @@ export type SendMessageOptions = {
  * Get or create a session for a chat.
  */
 async function ensureSession(chatId: number): Promise<ChatSession> {
+  await ensureWorkspace(config.workspaceDir);
+
   const existing = await getSession(chatId);
   if (existing) return existing;
 
@@ -53,40 +57,56 @@ export function sendMessage(opts: SendMessageOptions): Promise<RunClaudeResult> 
     await putSession(session);
 
     try {
-      let result = await runClaude({
+      // Build system prompt — needed for new sessions and for resume→new fallback
+      const identity = await loadIdentityFiles(config.workspaceDir);
+      const appendSystemPrompt = buildSystemPrompt(identity, config.workspaceDir);
+
+      const buildRunOpts = (overrides?: { sessionId?: string; isResume?: boolean; mcpConfigPath?: string | null }) => ({
         prompt: opts.prompt,
-        sessionId: session.sessionId,
-        isResume,
+        sessionId: overrides?.sessionId ?? session.sessionId,
+        isResume: overrides?.isResume ?? isResume,
         workDir: session.workDir,
-        mcpConfigPath: opts.mcpConfigPath,
+        mcpConfigPath: overrides && "mcpConfigPath" in overrides ? (overrides.mcpConfigPath ?? undefined) : opts.mcpConfigPath,
         chatId: opts.chatId,
         onText: opts.onText,
+        appendSystemPrompt: (overrides?.isResume ?? isResume) ? undefined : appendSystemPrompt,
       });
+
+      let result = await runClaude(buildRunOpts());
+
+      // If 0-byte output with MCP config, retry without it — MCP server may have failed to start
+      if (result.exitCode === 0 && isNoOutput(result.text) && opts.mcpConfigPath) {
+        console.warn(`[session] 0-byte output with MCP config, retrying without MCP`);
+        result = await runClaude(buildRunOpts({ mcpConfigPath: null }));
+      }
 
       // If resume failed because the session doesn't exist, retry as new session
       if (isResume && result.exitCode !== 0 && result.text.includes("No conversation found")) {
         console.warn(`[session] Session ${session.sessionId} not found in CLI, resetting to new session`);
         session.sessionId = crypto.randomUUID();
         session.messageCount = 0;
-        result = await runClaude({
-          prompt: opts.prompt,
-          sessionId: session.sessionId,
-          isResume: false,
-          workDir: session.workDir,
-          mcpConfigPath: opts.mcpConfigPath,
-          chatId: opts.chatId,
-          onText: opts.onText,
-        });
+        result = await runClaude(buildRunOpts({ sessionId: session.sessionId, isResume: false }));
+
+        // Check MCP fallback again for the fresh session
+        if (result.exitCode === 0 && isNoOutput(result.text) && opts.mcpConfigPath) {
+          console.warn(`[session] 0-byte output with MCP config, retrying without MCP`);
+          result = await runClaude(buildRunOpts({ sessionId: session.sessionId, isResume: false, mcpConfigPath: null }));
+        }
       }
 
       // Only advance state on success
       session.status = "idle";
       session.lastMessageAt = new Date().toISOString();
-      if (result.exitCode === 0) {
+      if (result.exitCode === 0 && !isNoOutput(result.text)) {
         session.messageCount += 1;
         // Adopt session ID only from successful runs
         if (result.sessionId && result.sessionId !== session.sessionId) {
           session.sessionId = result.sessionId;
+        }
+        // Track onboarding completion
+        if (!session.onboardingComplete && await isOnboardingComplete(config.workspaceDir)) {
+          session.onboardingComplete = true;
+          console.log(`[session] Onboarding complete for chat ${opts.chatId}`);
         }
       }
       await putSession(session);
@@ -109,6 +129,7 @@ export function sendMessage(opts: SendMessageOptions): Promise<RunClaudeResult> 
 export async function newSession(chatId: number): Promise<ChatSession> {
   // Cancel any running process first
   cancelProcess(chatId);
+  await ensureWorkspace(config.workspaceDir);
 
   const session: ChatSession = {
     chatId,
@@ -150,4 +171,10 @@ export async function getStatus(chatId: number): Promise<{
     session: session ?? undefined,
     isRunning: isRunning(chatId),
   };
+}
+
+/** Check if the result text indicates no meaningful output was produced. */
+function isNoOutput(text: string): boolean {
+  const trimmed = text.trim();
+  return !trimmed || trimmed === "(no output)";
 }

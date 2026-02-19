@@ -22,6 +22,8 @@ export type RunClaudeOptions = {
   onEvent?: (event: StreamEvent) => void;
   /** AbortSignal to cancel the run externally. */
   signal?: AbortSignal;
+  /** System prompt to append (new sessions only, ignored on resume). */
+  appendSystemPrompt?: string;
 };
 
 export type RunClaudeResult = {
@@ -49,6 +51,9 @@ function buildArgs(opts: RunClaudeOptions): string[] {
     if (opts.mcpConfigPath) {
       args.push("--mcp-config", opts.mcpConfigPath);
     }
+    if (opts.appendSystemPrompt) {
+      args.push("--append-system-prompt", opts.appendSystemPrompt);
+    }
   }
 
   args.push(opts.prompt);
@@ -71,12 +76,18 @@ export function runClaude(opts: RunClaudeOptions): Promise<RunClaudeResult> {
     // Don't pass our own API keys to the child process
     delete env.ANTHROPIC_API_KEY;
 
+    console.log(`[runner] Spawning: claude ${args.map(a => a.length > 80 ? a.slice(0, 80) + "…" : a).join(" ")}`);
+    console.log(`[runner] cwd: ${workDir}`);
+    if (opts.mcpConfigPath) console.log(`[runner] MCP config: ${opts.mcpConfigPath}`);
+
     const proc = spawn("claude", args, {
       cwd: workDir,
       env,
-      stdio: ["ignore", "pipe", "pipe"],
-      detached: true, // Enable process group killing
+      stdio: ["pipe", "pipe", "pipe"],
     });
+
+    // Close stdin immediately — some CLIs behave differently with /dev/null vs a closed pipe
+    proc.stdin!.end();
 
     // Track for cancellation
     if (opts.chatId !== undefined) {
@@ -222,8 +233,10 @@ export function runClaude(opts: RunClaudeOptions): Promise<RunClaudeResult> {
       if (!settled) {
         settled = true;
         const error = code !== 0 ? stderr.trim() || `Process exited with code ${code}` : undefined;
-        if (error) {
-          console.warn(`[runner] Claude process exited with code ${code}: ${error}`);
+        // Always log exit details for diagnostics
+        console.log(`[runner] Claude process exited (code: ${code}, stdout: ${stdout.length} bytes, stderr: ${stderr.length} bytes)`);
+        if (stderr.trim()) {
+          console.warn(`[runner] stderr: ${stderr.trim().slice(0, 500)}`);
         }
         if (!accumulatedText.trim() && !stderr.trim()) {
           console.warn(`[runner] Claude process produced no output (exit code: ${code}, stdout bytes: ${stdout.length}, stderr bytes: ${stderr.length})`);
