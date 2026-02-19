@@ -54,7 +54,7 @@ export function sendMessage(opts: SendMessageOptions): Promise<RunClaudeResult> 
     await putSession(session);
 
     try {
-      const result = await runClaude({
+      let result = await runClaude({
         prompt: opts.prompt,
         sessionId: session.sessionId,
         isResume,
@@ -63,6 +63,22 @@ export function sendMessage(opts: SendMessageOptions): Promise<RunClaudeResult> 
         chatId: opts.chatId,
         onText: opts.onText,
       });
+
+      // If resume failed because the session doesn't exist, retry as new session
+      if (isResume && result.exitCode !== 0 && result.text.includes("No conversation found")) {
+        console.warn(`[session] Session ${session.sessionId} not found in CLI, resetting to new session`);
+        session.sessionId = crypto.randomUUID();
+        session.messageCount = 1;
+        result = await runClaude({
+          prompt: opts.prompt,
+          sessionId: session.sessionId,
+          isResume: false,
+          workDir: session.workDir,
+          mcpConfigPath: opts.mcpConfigPath,
+          chatId: opts.chatId,
+          onText: opts.onText,
+        });
+      }
 
       // Update session with result
       session.status = "idle";

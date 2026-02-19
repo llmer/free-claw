@@ -53,6 +53,12 @@ export function parseStreamLine(line: string): StreamEvent | null {
     const durationMs = typeof parsed.duration_ms === "number" ? parsed.duration_ms : undefined;
     const costUsd = typeof parsed.cost_usd === "number" ? parsed.cost_usd : undefined;
 
+    // If this is an error result, extract from the errors array
+    if (parsed.is_error && Array.isArray(parsed.errors) && parsed.errors.length > 0) {
+      const errorMsg = parsed.errors.join("; ");
+      return { type: "error", error: errorMsg };
+    }
+
     // Extract result text from various possible shapes
     let text = "";
     if (typeof parsed.result === "string") {
