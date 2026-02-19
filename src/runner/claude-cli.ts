@@ -216,6 +216,12 @@ export function runClaude(opts: RunClaudeOptions): Promise<RunClaudeResult> {
       if (!settled) {
         settled = true;
         const error = code !== 0 ? stderr.trim() || `Process exited with code ${code}` : undefined;
+        if (error) {
+          console.warn(`[runner] Claude process exited with code ${code}: ${error}`);
+        }
+        if (!accumulatedText.trim() && !stderr.trim()) {
+          console.warn(`[runner] Claude process produced no output (exit code: ${code}, stdout bytes: ${stdout.length}, stderr bytes: ${stderr.length})`);
+        }
         resolve({
           text: accumulatedText.trim() || stderr.trim() || "(no output)",
           sessionId,

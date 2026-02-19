@@ -89,7 +89,12 @@ export function createBot(opts: {
       // Send the full response as chunked messages.
       // If the stream message already contains most of the text, we skip re-sending.
       const streamMsgId = stream.messageId();
-      const fullText = result.text.trim();
+      let fullText = result.text.trim();
+
+      // Surface CLI errors so the user knows what went wrong
+      if (result.error && fullText === "(no output)") {
+        fullText = `⚠ ${result.error}`;
+      }
 
       if (!fullText) {
         if (!streamMsgId) {
