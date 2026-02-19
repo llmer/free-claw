@@ -35,7 +35,7 @@ export type RunClaudeResult = {
  * Build CLI arguments for the claude command.
  */
 function buildArgs(opts: RunClaudeOptions): string[] {
-  const args: string[] = ["-p", "--output-format", "stream-json", "--dangerously-skip-permissions"];
+  const args: string[] = ["-p", "--verbose", "--output-format", "stream-json", "--dangerously-skip-permissions"];
 
   if (opts.isResume) {
     // Resume uses --resume instead of --session-id, --model, etc.
