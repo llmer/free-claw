@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { config } from "./config.js";
 import { createBot } from "./telegram/bot.js";
 import { generateMcpConfig } from "./browser/mcp-config.js";
@@ -11,6 +12,16 @@ async function main() {
   console.log(`[init] Model: ${config.claudeModel || "(CLI default)"}`);
   console.log(`[init] Browser: ${config.enableBrowser}`);
   console.log(`[init] Allowed users: ${config.allowedUsers.length > 0 ? config.allowedUsers.join(", ") : "(all)"}`);
+
+  // Verify Claude CLI is accessible
+  try {
+    const version = execSync("claude --version", { timeout: 10_000, encoding: "utf-8" }).trim();
+    console.log(`[init] Claude CLI: ${version}`);
+  } catch (err) {
+    console.error("[init] Failed to run 'claude --version' — is the CLI installed and on PATH?");
+    console.error("[init]", err instanceof Error ? err.message : err);
+    process.exit(1);
+  }
 
   // Generate MCP config for browser access
   const mcpConfigPath = await generateMcpConfig();
