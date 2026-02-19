@@ -1,13 +1,17 @@
 import type { Context } from "grammy";
 import { newSession, cancelChat, getStatus } from "../session/manager.js";
+import { config } from "../config.js";
+import { isOnboardingComplete } from "../workspace/bootstrap.js";
+import { startOnboardingWizard } from "./ui/onboarding.js";
 import type { SchedulerService } from "../scheduler/service.js";
 
-/**
- * Register all bot commands.
- * Scheduler commands are in a separate function since the scheduler may not be initialized yet.
- */
-
 export async function handleStart(ctx: Context): Promise<void> {
+  // Auto-trigger onboarding if not yet complete
+  if (!await isOnboardingComplete(config.workspaceDir)) {
+    await startOnboardingWizard(ctx);
+    return;
+  }
+
   await ctx.reply(
     "Hello! I'm your async Claude Code bot.\n\n" +
     "Send me any message and I'll forward it to Claude Code.\n\n" +
@@ -15,6 +19,9 @@ export async function handleStart(ctx: Context): Promise<void> {
     "/new — start a fresh conversation\n" +
     "/cancel — cancel the running task\n" +
     "/status — check session status\n" +
+    "/setup — run the identity setup wizard\n" +
+    "/soul — view/edit assistant identity\n" +
+    "/memory — browse memory files\n" +
     "/schedule <time> | <prompt> — one-off scheduled task\n" +
     "/every <pattern> | <prompt> — recurring scheduled task\n" +
     "/jobs — list scheduled jobs\n" +
@@ -110,35 +117,6 @@ export function handleEvery(scheduler: SchedulerService) {
     } catch (err) {
       await ctx.reply(`Failed to create recurring job: ${err instanceof Error ? err.message : String(err)}`);
     }
-  };
-}
-
-export function handleJobs(scheduler: SchedulerService) {
-  return async (ctx: Context): Promise<void> => {
-    const chatId = ctx.chat?.id;
-    if (!chatId) return;
-
-    const jobs = scheduler.listJobs(chatId);
-    if (jobs.length === 0) {
-      await ctx.reply("No scheduled jobs.");
-      return;
-    }
-
-    const lines = jobs.map((job) => {
-      const id = job.id.slice(0, 8);
-      const enabled = job.enabled ? "" : " [disabled]";
-      const nextRun = job.state.nextRunAtMs
-        ? new Date(job.state.nextRunAtMs).toLocaleString()
-        : "none";
-      const scheduleDesc = job.schedule.kind === "at"
-        ? "one-time"
-        : job.schedule.kind === "cron"
-          ? `cron: ${job.schedule.expr}`
-          : `every ${Math.round(job.schedule.everyMs / 60_000)}m`;
-      return `${id} | ${scheduleDesc}${enabled} | next: ${nextRun}\n  → ${job.prompt.slice(0, 60)}`;
-    });
-
-    await ctx.reply(`Scheduled jobs:\n\n${lines.join("\n\n")}`);
   };
 }
 

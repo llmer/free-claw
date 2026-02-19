@@ -158,6 +158,27 @@ export class SchedulerService {
   }
 
   /**
+   * Toggle a job's enabled state by prefix match on ID.
+   */
+  async toggleJob(chatId: number, idPrefix: string): Promise<boolean> {
+    const job = this.store.jobs.find(
+      (j) => j.chatId === chatId && j.id.startsWith(idPrefix),
+    );
+    if (!job) return false;
+
+    job.enabled = !job.enabled;
+    if (job.enabled && job.state.nextRunAtMs === undefined) {
+      job.state.nextRunAtMs = computeNextRunAtMs(job.schedule, Date.now());
+    }
+    if (!job.enabled) {
+      job.state.nextRunAtMs = undefined;
+    }
+    await this.persist();
+    this.armTimer();
+    return true;
+  }
+
+  /**
    * Get timezone for a chat.
    */
   getTimezone(chatId: number): string {

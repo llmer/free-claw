@@ -11,12 +11,15 @@ import {
   handleStatus,
   handleSchedule,
   handleEvery,
-  handleJobs,
   handleCancelJob,
   handleRunJob,
   handleTimezone,
 } from "./commands.js";
 import type { SchedulerService } from "../scheduler/service.js";
+import { createOnboardingComposer, handleOnboardingText } from "./ui/onboarding.js";
+import { createJobsComposer } from "./ui/jobs-ui.js";
+import { createMemoryComposer } from "./ui/memory-ui.js";
+import { createIdentityComposer } from "./ui/identity-ui.js";
 
 export function createBot(opts: {
   mcpConfigPath?: string;
@@ -44,14 +47,21 @@ export function createBot(opts: {
   bot.command("cancel", handleCancel);
   bot.command("status", handleStatus);
 
-  // Scheduler commands (require scheduler to be set)
+  // Scheduler commands (require scheduler to be set) — text-only commands stay here
   if (opts.scheduler) {
     bot.command("schedule", handleSchedule(opts.scheduler));
     bot.command("every", handleEvery(opts.scheduler));
-    bot.command("jobs", handleJobs(opts.scheduler));
     bot.command("canceljob", handleCancelJob(opts.scheduler));
     bot.command("runjob", handleRunJob(opts.scheduler));
     bot.command("timezone", handleTimezone(opts.scheduler));
+  }
+
+  // UI Composers — after access control, before text handler
+  bot.use(createOnboardingComposer());
+  bot.use(createIdentityComposer());
+  bot.use(createMemoryComposer());
+  if (opts.scheduler) {
+    bot.use(createJobsComposer(opts.scheduler));
   }
 
   // Text message handler — forward to Claude Code
@@ -61,6 +71,9 @@ export function createBot(opts: {
 
     // Skip if it looks like a command we didn't handle
     if (text.startsWith("/")) return;
+
+    // Intercept text during onboarding wizard
+    if (await handleOnboardingText(ctx)) return;
 
     // Sanitize and check for injection
     const sanitized = sanitizeForPrompt(text);

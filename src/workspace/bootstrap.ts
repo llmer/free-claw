@@ -5,7 +5,7 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { WORKSPACE_FILES, TEMPLATE_BOOTSTRAP, TEMPLATE_IDENTITY } from "./templates.js";
+import { WORKSPACE_FILES, TEMPLATE_IDENTITY } from "./templates.js";
 
 /**
  * Ensure the workspace directory has all template files.
@@ -28,16 +28,7 @@ export async function ensureWorkspace(workspaceDir: string): Promise<void> {
     }
   }
 
-  // Seed BOOTSTRAP.md only if onboarding not yet complete
-  if (!await isOnboardingComplete(workspaceDir)) {
-    const bootstrapPath = path.join(workspaceDir, "BOOTSTRAP.md");
-    try {
-      await fs.writeFile(bootstrapPath, TEMPLATE_BOOTSTRAP, { flag: "wx" });
-      console.log(`[workspace] Seeded BOOTSTRAP.md`);
-    } catch (err: unknown) {
-      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
-    }
-  }
+  // BOOTSTRAP.md is no longer seeded — onboarding uses the /setup wizard instead
 }
 
 /** Identity files to load into the system prompt (small, ~2KB total). */
