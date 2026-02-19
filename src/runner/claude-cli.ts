@@ -224,6 +224,7 @@ export function runClaude(opts: RunClaudeOptions): Promise<RunClaudeResult> {
         }
         if (!accumulatedText.trim() && !stderr.trim()) {
           console.warn(`[runner] Claude process produced no output (exit code: ${code}, stdout bytes: ${stdout.length}, stderr bytes: ${stderr.length})`);
+          console.warn(`[runner:debug] Raw stdout:\n${stdout.slice(0, 2000)}`);
         }
         resolve({
           text: accumulatedText.trim() || stderr.trim() || "(no output)",
