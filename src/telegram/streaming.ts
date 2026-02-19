@@ -36,6 +36,15 @@ export function createTelegramStream(params: {
   let throttleTimer: ReturnType<typeof setTimeout> | null = null;
   let inFlight: Promise<boolean | void> | null = null;
 
+  // Send "typing" indicator immediately and refresh every 4s (expires after ~5s)
+  const TYPING_INTERVAL_MS = 4_000;
+  const sendTyping = () => {
+    params.api.sendChatAction(chatId, "typing").catch(() => {});
+  };
+  sendTyping();
+  const typingTimer = setInterval(sendTyping, TYPING_INTERVAL_MS);
+  const stopTyping = () => clearInterval(typingTimer);
+
   const sendOrEdit = async (text: string): Promise<boolean> => {
     if (stopped && !isFinal) return false;
 
@@ -111,11 +120,13 @@ export function createTelegramStream(params: {
   };
 
   const stop = async () => {
+    stopTyping();
     isFinal = true;
     await flush();
   };
 
   const clear = async () => {
+    stopTyping();
     stopped = true;
     if (throttleTimer) {
       clearTimeout(throttleTimer);
