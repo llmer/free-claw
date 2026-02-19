@@ -159,7 +159,7 @@ export function runClaude(opts: RunClaudeOptions): Promise<RunClaudeResult> {
       for (const line of lines) {
         const event = parseStreamLine(line);
         if (!event) {
-          if (line.trim()) console.log(`[runner:debug] Unparsed line: ${line.slice(0, 300)}`);
+          if (line.trim()) console.warn(`[runner] Unparsed line: ${line.slice(0, 300)}`);
           continue;
         }
 
@@ -224,7 +224,6 @@ export function runClaude(opts: RunClaudeOptions): Promise<RunClaudeResult> {
         }
         if (!accumulatedText.trim() && !stderr.trim()) {
           console.warn(`[runner] Claude process produced no output (exit code: ${code}, stdout bytes: ${stdout.length}, stderr bytes: ${stderr.length})`);
-          console.warn(`[runner:debug] Raw stdout:\n${stdout.slice(0, 2000)}`);
         }
         resolve({
           text: accumulatedText.trim() || stderr.trim() || "(no output)",

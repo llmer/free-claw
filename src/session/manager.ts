@@ -47,10 +47,9 @@ export function sendMessage(opts: SendMessageOptions): Promise<RunClaudeResult> 
     const session = await ensureSession(opts.chatId);
     const isResume = session.messageCount > 0;
 
-    // Mark as running
+    // Mark as running (don't increment messageCount yet — only on success)
     session.status = "running";
     session.lastMessageAt = new Date().toISOString();
-    session.messageCount += 1;
     await putSession(session);
 
     try {
@@ -68,7 +67,7 @@ export function sendMessage(opts: SendMessageOptions): Promise<RunClaudeResult> 
       if (isResume && result.exitCode !== 0 && result.text.includes("No conversation found")) {
         console.warn(`[session] Session ${session.sessionId} not found in CLI, resetting to new session`);
         session.sessionId = crypto.randomUUID();
-        session.messageCount = 1;
+        session.messageCount = 0;
         result = await runClaude({
           prompt: opts.prompt,
           sessionId: session.sessionId,
@@ -80,12 +79,15 @@ export function sendMessage(opts: SendMessageOptions): Promise<RunClaudeResult> 
         });
       }
 
-      // Update session with result
+      // Only advance state on success
       session.status = "idle";
       session.lastMessageAt = new Date().toISOString();
-      // If Claude returned a different session ID, update it
-      if (result.sessionId && result.sessionId !== session.sessionId) {
-        session.sessionId = result.sessionId;
+      if (result.exitCode === 0) {
+        session.messageCount += 1;
+        // Adopt session ID only from successful runs
+        if (result.sessionId && result.sessionId !== session.sessionId) {
+          session.sessionId = result.sessionId;
+        }
       }
       await putSession(session);
 
