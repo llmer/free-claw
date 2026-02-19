@@ -30,7 +30,7 @@ export const config = {
     .filter((n) => Number.isFinite(n) && n > 0),
 
   workspaceDir: expandHome(process.env.WORKSPACE_DIR?.trim() || "~/projects"),
-  dataDir: expandHome(process.env.DATA_DIR?.trim() || "~/.async-claude"),
+  dataDir: expandHome(process.env.DATA_DIR?.trim() || "~/.free-claw"),
   claudeModel: process.env.CLAUDE_MODEL?.trim() || "sonnet",
   enableBrowser: process.env.ENABLE_BROWSER?.trim()?.toLowerCase() !== "false",
   timeoutMs: Number(process.env.TIMEOUT_MS) || 600_000,

@@ -1,4 +1,4 @@
-# async-claude-rd
+# free-claw
 
 Telegram bot that wraps the `claude` CLI. Send messages from your phone, get responses async. Supports session persistence, browser access via Playwright, and scheduled tasks.
 
@@ -12,7 +12,7 @@ Telegram bot that wraps the `claude` CLI. Send messages from your phone, get res
 ## Setup
 
 ```bash
-git clone <repo-url> && cd async-claude-rd
+git clone https://github.com/llmer/free-claw.git && cd free-claw
 pnpm install
 cp .env.example .env
 ```
@@ -40,7 +40,7 @@ That's it. Message your bot on Telegram.
 | `TELEGRAM_BOT_TOKEN` | *required* | Bot token from @BotFather |
 | `ALLOWED_TELEGRAM_USERS` | (all) | Comma-separated Telegram user IDs. Leave empty to allow anyone (not recommended). |
 | `WORKSPACE_DIR` | `~/projects` | Working directory for Claude Code sessions |
-| `DATA_DIR` | `~/.async-claude` | Where session and scheduler data is persisted |
+| `DATA_DIR` | `~/.free-claw` | Where session and scheduler data is persisted |
 | `CLAUDE_MODEL` | `sonnet` | Default model passed to `claude --model` |
 | `ENABLE_BROWSER` | `true` | Enable Playwright MCP for web browsing. Set `false` to disable. |
 | `TIMEOUT_MS` | `600000` | Overall process timeout (10 min) |

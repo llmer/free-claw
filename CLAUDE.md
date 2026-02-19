@@ -61,7 +61,7 @@ Both resolve with partial text rather than rejecting.
 
 ### Persistence
 
-Both session store (`~/.async-claude/sessions.json`) and scheduler store (`~/.async-claude/scheduler/jobs.json`) use atomic writes: write to temp file → rename → best-effort backup copy.
+Both session store (`~/.free-claw/sessions.json`) and scheduler store (`~/.free-claw/scheduler/jobs.json`) use atomic writes: write to temp file → rename → best-effort backup copy.
 
 ### Wiring quirk in index.ts
 

@@ -5,7 +5,7 @@ import { SchedulerService } from "./scheduler/service.js";
 import { killAll as killAllProcesses } from "./runner/process-manager.js";
 
 async function main() {
-  console.log("[init] Starting async-claude-rd...");
+  console.log("[init] Starting free-claw...");
   console.log(`[init] Workspace: ${config.workspaceDir}`);
   console.log(`[init] Data dir: ${config.dataDir}`);
   console.log(`[init] Model: ${config.claudeModel}`);

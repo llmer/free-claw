@@ -4,9 +4,9 @@ services:
     restart: unless-stopped
     env_file: .env
     volumes:
-      - ${DATA_DIR:-~/.async-claude}:/root/.async-claude
+      - ${DATA_DIR:-~/.free-claw}:/root/.free-claw
       - ${WORKSPACE_DIR:-~/projects}:/workspace
     environment:
       - WORKSPACE_DIR=/workspace
-      - DATA_DIR=/root/.async-claude
+      - DATA_DIR=/root/.free-claw
     stop_grace_period: 30s
