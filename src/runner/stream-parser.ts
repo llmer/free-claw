@@ -13,6 +13,39 @@ export type StreamEvent =
   | { type: "error"; error: string }
   | { type: "session"; sessionId: string };
 
+/**
+ * Extract readable text from an AskUserQuestion tool_use input.
+ * Returns formatted questions with headers and option bullets, or null if invalid.
+ */
+function formatAskUserQuestions(input: unknown): string | null {
+  if (!input || typeof input !== "object") return null;
+  const inp = input as Record<string, unknown>;
+  const questions = inp.questions;
+  if (!Array.isArray(questions) || questions.length === 0) return null;
+
+  const parts: string[] = [];
+  for (const q of questions) {
+    if (!q || typeof q !== "object") continue;
+    const qObj = q as Record<string, unknown>;
+    const question = typeof qObj.question === "string" ? qObj.question : null;
+    if (!question) continue;
+
+    const header = typeof qObj.header === "string" ? qObj.header : null;
+    parts.push(header ? `**${header}:** ${question}` : question);
+
+    if (Array.isArray(qObj.options)) {
+      for (const opt of qObj.options) {
+        if (opt && typeof opt === "object") {
+          const label = (opt as Record<string, unknown>).label;
+          if (typeof label === "string") parts.push(`- ${label}`);
+        }
+      }
+    }
+  }
+
+  return parts.length > 0 ? parts.join("\n") : null;
+}
+
 export function parseStreamLine(line: string): StreamEvent | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
@@ -33,10 +66,33 @@ export function parseStreamLine(line: string): StreamEvent | null {
     return { type: "session", sessionId: parsed.session_id };
   }
 
-  // Assistant text chunks
+  // Assistant text chunks — old format: { type: "assistant", subtype: "text", text: "..." }
   if (type === "assistant" && parsed.subtype === "text") {
     const text = typeof parsed.text === "string" ? parsed.text : "";
     if (text) return { type: "text", text };
+  }
+
+  // Assistant text chunks — new format: { type: "assistant", message: { content: [{ type: "text", text: "..." }] } }
+  if (type === "assistant" && parsed.message && typeof parsed.message === "object") {
+    const msg = parsed.message as Record<string, unknown>;
+    if (Array.isArray(msg.content)) {
+      const texts: string[] = [];
+      for (const block of msg.content) {
+        if (!block || typeof block !== "object") continue;
+        const b = block as Record<string, unknown>;
+        if (b.type === "text") {
+          const t = b.text;
+          if (typeof t === "string") texts.push(t);
+        } else if (b.type === "tool_use" && b.name === "AskUserQuestion") {
+          const formatted = formatAskUserQuestions(b.input);
+          if (formatted) texts.push(formatted);
+        }
+      }
+      const combined = texts.join("");
+      if (combined) return { type: "text", text: combined };
+      // Content was processed but produced no text (e.g. non-AskUserQuestion tools)
+      return { type: "text", text: "" };
+    }
   }
 
   // Content block text (alternative format)
@@ -79,6 +135,11 @@ export function parseStreamLine(line: string): StreamEvent | null {
           ? parsed.message
           : "Unknown error";
     return { type: "error", error };
+  }
+
+  // User messages (tool_result responses from the CLI) — no useful content to surface
+  if (type === "user") {
+    return { type: "text", text: "" };
   }
 
   return null;
