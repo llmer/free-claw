@@ -31,7 +31,7 @@ export const config = {
 
   workspaceDir: expandHome(process.env.WORKSPACE_DIR?.trim() || "~/projects"),
   dataDir: expandHome(process.env.DATA_DIR?.trim() || "~/.free-claw"),
-  claudeModel: process.env.CLAUDE_MODEL?.trim() || "sonnet",
+  claudeModel: process.env.CLAUDE_MODEL?.trim() || "",
   enableBrowser: process.env.ENABLE_BROWSER?.trim()?.toLowerCase() !== "false",
   timeoutMs: Number(process.env.TIMEOUT_MS) || 600_000,
   noOutputTimeoutMs: Number(process.env.NO_OUTPUT_TIMEOUT_MS) || 180_000,

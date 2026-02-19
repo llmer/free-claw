@@ -42,7 +42,10 @@ function buildArgs(opts: RunClaudeOptions): string[] {
     args.push("--resume", opts.sessionId);
   } else {
     args.push("--session-id", opts.sessionId);
-    args.push("--model", opts.model ?? config.claudeModel);
+    const model = opts.model ?? config.claudeModel;
+    if (model) {
+      args.push("--model", model);
+    }
     if (opts.mcpConfigPath) {
       args.push("--mcp-config", opts.mcpConfigPath);
     }

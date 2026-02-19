@@ -8,7 +8,7 @@ async function main() {
   console.log("[init] Starting free-claw...");
   console.log(`[init] Workspace: ${config.workspaceDir}`);
   console.log(`[init] Data dir: ${config.dataDir}`);
-  console.log(`[init] Model: ${config.claudeModel}`);
+  console.log(`[init] Model: ${config.claudeModel || "(CLI default)"}`);
   console.log(`[init] Browser: ${config.enableBrowser}`);
   console.log(`[init] Allowed users: ${config.allowedUsers.length > 0 ? config.allowedUsers.join(", ") : "(all)"}`);
 
