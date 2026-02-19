@@ -158,7 +158,10 @@ export function runClaude(opts: RunClaudeOptions): Promise<RunClaudeResult> {
 
       for (const line of lines) {
         const event = parseStreamLine(line);
-        if (!event) continue;
+        if (!event) {
+          if (line.trim()) console.log(`[runner:debug] Unparsed line: ${line.slice(0, 300)}`);
+          continue;
+        }
 
         opts.onEvent?.(event);
 
