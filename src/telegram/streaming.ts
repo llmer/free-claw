@@ -43,7 +43,34 @@ export function createTelegramStream(params: {
   };
   sendTyping();
   const typingTimer = setInterval(sendTyping, TYPING_INTERVAL_MS);
-  const stopTyping = () => clearInterval(typingTimer);
+
+  // Activity indicator: when text stops changing but process is still running,
+  // append a visual indicator to the message so the user knows we're still working.
+  const ACTIVITY_CHECK_MS = 6_000;
+  const ACTIVITY_SUFFIX = "\n\n⏳ Working...";
+  let lastRealText = "";
+  let lastTextChangeAt = Date.now();
+  let showingActivity = false;
+
+  const activityTimer = setInterval(() => {
+    if (stopped || isFinal) return;
+    if (!streamMessageId) return; // No message sent yet
+    if (showingActivity) return; // Already showing
+    if (Date.now() - lastTextChangeAt < ACTIVITY_CHECK_MS) return;
+
+    // Text has been stale — show activity indicator in the message
+    showingActivity = true;
+    const withActivity = lastRealText + ACTIVITY_SUFFIX;
+    if (withActivity.trimEnd().length <= TELEGRAM_MAX_CHARS) {
+      pendingText = withActivity;
+      scheduleFlush();
+    }
+  }, ACTIVITY_CHECK_MS);
+
+  const stopTyping = () => {
+    clearInterval(typingTimer);
+    clearInterval(activityTimer);
+  };
 
   const sendOrEdit = async (text: string): Promise<boolean> => {
     if (stopped && !isFinal) return false;
@@ -106,6 +133,11 @@ export function createTelegramStream(params: {
 
   const update = (text: string) => {
     if (stopped || isFinal) return;
+    if (text !== lastRealText) {
+      lastRealText = text;
+      lastTextChangeAt = Date.now();
+      showingActivity = false;
+    }
     pendingText = text;
     scheduleFlush();
   };
