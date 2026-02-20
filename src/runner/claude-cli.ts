@@ -3,6 +3,41 @@ import { config } from "../config.js";
 import { parseStreamLine, type StreamEvent } from "./stream-parser.js";
 import { trackProcess, untrackProcess } from "./process-manager.js";
 
+export const DEFAULT_ALLOWED_TOOLS: string[] = [
+  // File tools (scoped to cwd + --add-dir)
+  "Read", "Edit", "Write", "Glob", "Grep", "MultiEdit",
+  // Agent / planning
+  "Task", "TodoRead", "TodoWrite",
+  // Web
+  "WebFetch", "WebSearch",
+  // MCP (Playwright browser)
+  "mcp__playwright__*",
+  // Bash: version control
+  "Bash(git:*)",
+  // Bash: file reading / search
+  "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(find:*)",
+  "Bash(grep:*)", "Bash(rg:*)", "Bash(wc:*)", "Bash(sort:*)", "Bash(uniq:*)",
+  "Bash(diff:*)",
+  // Bash: file manipulation (no rm)
+  "Bash(mkdir:*)", "Bash(touch:*)", "Bash(cp:*)", "Bash(mv:*)",
+  // Bash: dev toolchains
+  "Bash(node:*)", "Bash(npm:*)", "Bash(npx:*)", "Bash(pnpm:*)", "Bash(yarn:*)",
+  "Bash(tsc:*)", "Bash(tsx:*)", "Bash(python:*)", "Bash(python3:*)",
+  "Bash(pip:*)", "Bash(pip3:*)", "Bash(cargo:*)", "Bash(go:*)", "Bash(make:*)",
+  // Bash: text processing
+  "Bash(sed:*)", "Bash(awk:*)", "Bash(jq:*)", "Bash(xargs:*)",
+  // Bash: network
+  "Bash(curl:*)", "Bash(wget:*)",
+  // Bash: archives
+  "Bash(tar:*)", "Bash(zip:*)", "Bash(unzip:*)",
+  // Bash: system info / misc
+  "Bash(echo:*)", "Bash(printf:*)", "Bash(date:*)", "Bash(which:*)",
+  "Bash(pwd:*)", "Bash(whoami:*)", "Bash(uname:*)", "Bash(env:*)",
+  "Bash(test:*)", "Bash(true:*)", "Bash(false:*)", "Bash(chmod:*)",
+  // Bash: build / test
+  "Bash(vitest:*)", "Bash(biome:*)", "Bash(docker:*)", "Bash(docker-compose:*)",
+];
+
 export type RunClaudeOptions = {
   prompt: string;
   sessionId: string;
@@ -33,10 +68,39 @@ export type RunClaudeResult = {
 };
 
 /**
+ * Build sandbox/permission CLI arguments.
+ * These are passed on every invocation (including --resume) because
+ * permission flags are not inherited across CLI sessions.
+ */
+function buildSandboxArgs(opts: RunClaudeOptions): string[] {
+  const args: string[] = ["--permission-mode", config.permissionMode];
+
+  // Allowlist: use full override if ALLOWED_TOOLS is set, otherwise defaults + extras
+  const tools = config.allowedTools ?? [
+    ...DEFAULT_ALLOWED_TOOLS,
+    ...config.extraAllowedTools,
+  ];
+  if (tools.length > 0) {
+    args.push("--allowedTools", ...tools);
+  }
+
+  // Additional directories (beyond cwd) for file tool scoping
+  const additionalDirs = config.sandboxAdditionalDirs ?? [config.dataDir, config.uploadsDir];
+  const workDir = opts.workDir ?? config.workspaceDir;
+  const extraDirs = [...new Set(additionalDirs.filter(Boolean))].filter(d => d !== workDir);
+  if (extraDirs.length > 0) {
+    args.push("--add-dir", ...extraDirs);
+  }
+
+  return args;
+}
+
+/**
  * Build CLI arguments for the claude command.
  */
-function buildArgs(opts: RunClaudeOptions): string[] {
-  const args: string[] = ["-p", "--verbose", "--output-format", "stream-json", "--dangerously-skip-permissions"];
+export function buildArgs(opts: RunClaudeOptions): string[] {
+  const args: string[] = ["-p", "--verbose", "--output-format", "stream-json"];
+  args.push(...buildSandboxArgs(opts));
 
   if (opts.isResume) {
     // Resume uses --resume instead of --session-id, --model, etc.

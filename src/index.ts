@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
 import { config } from "./config.js";
+import { DEFAULT_ALLOWED_TOOLS } from "./runner/claude-cli.js";
 import { createBot } from "./telegram/bot.js";
 import { generateMcpConfig } from "./browser/mcp-config.js";
 import { ensureChromeRunning, startHealthCheck, stopHealthCheck, stopChrome } from "./browser/chrome-manager.js";
@@ -13,6 +14,9 @@ async function main() {
   console.log(`[init] Model: ${config.claudeModel || "(CLI default)"}`);
   console.log(`[init] Browser: ${config.enableBrowser}`);
   console.log(`[init] Allowed users: ${config.allowedUsers.length > 0 ? config.allowedUsers.join(", ") : "(all)"}`);
+  console.log(`[init] Permission mode: ${config.permissionMode}`);
+  const effectiveTools = config.allowedTools ?? [...DEFAULT_ALLOWED_TOOLS, ...config.extraAllowedTools];
+  console.log(`[init] Sandbox: ${effectiveTools.length} allowed tools${config.extraAllowedTools.length > 0 ? `, ${config.extraAllowedTools.length} extras` : ""}`);
 
   // Verify Claude CLI is accessible
   try {

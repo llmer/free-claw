@@ -49,6 +49,20 @@ export const config = {
   maxBrowserTabs: Number(process.env.MAX_BROWSER_TABS) || 5,
   uploadsDir: expandHome(process.env.UPLOADS_DIR?.trim() || "")
     || path.join(dataDir, "uploads"),
+
+  // Sandbox / permissions
+  permissionMode: process.env.PERMISSION_MODE?.trim() || "dontAsk",
+
+  allowedTools: process.env.ALLOWED_TOOLS?.trim()
+    ? process.env.ALLOWED_TOOLS.split(",").map(s => s.trim()).filter(Boolean)
+    : null, // null = use built-in defaults
+
+  extraAllowedTools: (process.env.EXTRA_ALLOWED_TOOLS?.trim() || "")
+    .split(",").map(s => s.trim()).filter(Boolean),
+
+  sandboxAdditionalDirs: process.env.SANDBOX_ADDITIONAL_DIRS?.trim()
+    ? process.env.SANDBOX_ADDITIONAL_DIRS.split(",").map(s => expandHome(s.trim())).filter(Boolean)
+    : null, // null = auto (dataDir + uploadsDir)
 } as const;
 
 export type Config = typeof config;
