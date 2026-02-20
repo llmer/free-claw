@@ -12,7 +12,7 @@ import type { CronSchedule } from "./types.js";
  * Parse a recurring pattern into a cron schedule.
  * Returns null if the pattern doesn't match any known recurring format.
  */
-function parseRecurringPattern(input: string, tz?: string): CronSchedule | null {
+export function parseRecurringPattern(input: string, tz?: string): CronSchedule | null {
   const text = input.toLowerCase().trim();
 
   // "every N minutes/hours" → fixed interval

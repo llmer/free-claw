@@ -24,6 +24,8 @@ export type ScheduledJob = {
   deleteAfterRun: boolean;
   createdAt: string;
   userTimezone?: string;
+  expiresAt?: string;
+  source?: "command" | "inbox";
   state: ScheduledJobState;
 };
 

@@ -17,6 +17,7 @@ import {
   handleTimezone,
 } from "./commands.js";
 import type { SchedulerService } from "../scheduler/service.js";
+import { processInbox } from "../scheduler/inbox.js";
 import { createOnboardingComposer, handleOnboardingText } from "./ui/onboarding.js";
 import { createJobsComposer } from "./ui/jobs-ui.js";
 import { createMemoryComposer } from "./ui/memory-ui.js";
@@ -170,6 +171,11 @@ export function createBot(opts: {
       await stream.clear();
       const msg = err instanceof Error ? err.message : String(err);
       await ctx.reply(`Error: ${msg}`);
+    } finally {
+      if (opts.scheduler) {
+        await processInbox(chatId, config.workspaceDir, opts.scheduler, bot.api)
+          .catch(err => console.warn("[inbox] Failed:", err));
+      }
     }
   });
 

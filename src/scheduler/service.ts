@@ -7,9 +7,10 @@ import crypto from "node:crypto";
 import { config } from "../config.js";
 import { computeNextRunAtMs } from "./schedule.js";
 import { parseScheduleInput } from "./parse-time.js";
+import { processInbox } from "./inbox.js";
 import { loadSchedulerStore, saveSchedulerStore } from "./store.js";
 import { executeScheduledJob, type ExecutorDeps } from "./executor.js";
-import type { ScheduledJob, SchedulerStoreFile } from "./types.js";
+import type { CronSchedule, ScheduledJob, SchedulerStoreFile } from "./types.js";
 
 const MAX_TIMER_DELAY_MS = 60_000;
 const MIN_REFIRE_GAP_MS = 2_000;
@@ -111,6 +112,47 @@ export class SchedulerService {
       userTimezone: tz,
       state: {
         nextRunAtMs: computeNextRunAtMs(schedule, now),
+      },
+    };
+
+    this.store.jobs.push(job);
+    await this.persist();
+    this.armTimer();
+
+    return job;
+  }
+
+  /**
+   * Create a job from an inbox entry (written by Claude agent).
+   */
+  async createJobFromInbox(
+    chatId: number,
+    entry: {
+      name: string;
+      prompt: string;
+      schedule: CronSchedule;
+      mode: "once" | "recurring";
+      expiresAt?: string;
+    },
+  ): Promise<ScheduledJob> {
+    const now = Date.now();
+    const tz = this.getTimezone(chatId);
+
+    const job: ScheduledJob = {
+      id: crypto.randomUUID(),
+      name: entry.name,
+      chatId,
+      workDir: config.workspaceDir,
+      prompt: entry.prompt,
+      schedule: entry.schedule,
+      enabled: true,
+      deleteAfterRun: entry.mode === "once",
+      createdAt: new Date().toISOString(),
+      userTimezone: tz,
+      expiresAt: entry.expiresAt,
+      source: "inbox",
+      state: {
+        nextRunAtMs: computeNextRunAtMs(entry.schedule, now),
       },
     };
 
@@ -278,6 +320,27 @@ export class SchedulerService {
   }
 
   private async executeJob(job: ScheduledJob): Promise<void> {
+    // Expiry check — disable expired jobs before running
+    if (job.expiresAt) {
+      const expiryMs = new Date(job.expiresAt).getTime();
+      if (Number.isFinite(expiryMs) && Date.now() >= expiryMs) {
+        job.enabled = false;
+        job.state.lastStatus = "skipped";
+        job.state.nextRunAtMs = undefined;
+        job.state.runningAtMs = undefined;
+        await this.persist();
+        console.log(`[scheduler] Job ${job.id} expired (${job.expiresAt}), disabled`);
+        try {
+          await this.deps.api.sendMessage(job.chatId,
+            `Scheduled task "${job.name}" has expired and was disabled. Use /jobs to re-enable or delete it.`,
+          );
+        } catch {
+          // best-effort
+        }
+        return;
+      }
+    }
+
     const startedAt = Date.now();
     job.state.runningAtMs = startedAt;
     job.state.lastError = undefined;
@@ -307,6 +370,10 @@ export class SchedulerService {
     }
 
     await this.persist();
+
+    // Process inbox — scheduled runs may create follow-up tasks
+    await processInbox(job.chatId, job.workDir, this, this.deps.api)
+      .catch(err => console.warn("[inbox] Failed after scheduled job:", err));
   }
 
   private applyJobResult(
