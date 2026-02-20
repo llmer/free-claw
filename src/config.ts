@@ -19,6 +19,9 @@ function requireEnv(key: string): string {
   return value.trim();
 }
 
+const workspaceDir = expandHome(process.env.WORKSPACE_DIR?.trim() || "~/projects");
+const dataDir = expandHome(process.env.DATA_DIR?.trim() || "") || path.join(workspaceDir, "data");
+
 export const config = {
   telegramBotToken: requireEnv("TELEGRAM_BOT_TOKEN"),
 
@@ -29,8 +32,8 @@ export const config = {
     .map(Number)
     .filter((n) => Number.isFinite(n) && n > 0),
 
-  workspaceDir: expandHome(process.env.WORKSPACE_DIR?.trim() || "~/projects"),
-  dataDir: expandHome(process.env.DATA_DIR?.trim() || "~/.free-claw"),
+  workspaceDir,
+  dataDir,
   claudeModel: process.env.CLAUDE_MODEL?.trim() || "",
   enableBrowser: process.env.ENABLE_BROWSER?.trim()?.toLowerCase() !== "false",
   timeoutMs: Number(process.env.TIMEOUT_MS) || 600_000,
@@ -39,11 +42,13 @@ export const config = {
     process.env.DEFAULT_TIMEZONE?.trim() ||
     Intl.DateTimeFormat().resolvedOptions().timeZone,
   chromeDebugPort: Number(process.env.CHROME_DEBUG_PORT) || 9222,
-  chromeUserDataDir: expandHome(process.env.CHROME_USER_DATA_DIR?.trim() || "~/.free-claw/chrome-profile"),
+  chromeUserDataDir: expandHome(process.env.CHROME_USER_DATA_DIR?.trim() || "")
+    || path.join(dataDir, "chrome-profile"),
   chromePath: process.env.CHROME_PATH?.trim() || "",
   chromeHeadless: process.env.CHROME_HEADLESS?.trim()?.toLowerCase() !== "false",
   maxBrowserTabs: Number(process.env.MAX_BROWSER_TABS) || 5,
-  uploadsDir: expandHome(process.env.UPLOADS_DIR?.trim() || process.env.WORKSPACE_DIR?.trim() || "~/projects"),
+  uploadsDir: expandHome(process.env.UPLOADS_DIR?.trim() || "")
+    || path.join(dataDir, "uploads"),
 } as const;
 
 export type Config = typeof config;
