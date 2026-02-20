@@ -31,8 +31,9 @@ export function cancelProcess(chatId: number): boolean {
 
   const { proc } = entry;
   try {
-    if (!proc.killed) {
-      proc.kill("SIGTERM");
+    if (!proc.killed && proc.pid) {
+      // Kill entire process group (negative PID) so child processes are also terminated
+      process.kill(-proc.pid, "SIGTERM");
     }
   } catch {
     // Process may have already exited

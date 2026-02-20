@@ -147,7 +147,15 @@ export function runClaude(opts: RunClaudeOptions): Promise<RunClaudeResult> {
       cwd: workDir,
       env,
       stdio: ["pipe", "pipe", "pipe"],
+      detached: true,
     });
+
+    /** Kill the entire process group so child processes are also terminated. */
+    const killProc = () => {
+      try {
+        if (proc.pid) process.kill(-proc.pid, "SIGTERM");
+      } catch { /* process may have already exited */ }
+    };
 
     // Close stdin immediately — some CLIs behave differently with /dev/null vs a closed pipe
     proc.stdin!.end();
@@ -168,7 +176,7 @@ export function runClaude(opts: RunClaudeOptions): Promise<RunClaudeResult> {
       if (!settled) {
         settled = true;
         try {
-          proc.kill("SIGTERM");
+          killProc();
         } catch { /* ignore */ }
         resolve({
           text: accumulatedText || "(timed out after " + Math.round(timeoutMs / 1000) + "s)",
@@ -185,7 +193,7 @@ export function runClaude(opts: RunClaudeOptions): Promise<RunClaudeResult> {
         if (!settled) {
           settled = true;
           try {
-            proc.kill("SIGTERM");
+            killProc();
           } catch { /* ignore */ }
           resolve({
             text: accumulatedText || "(no output for " + Math.round(noOutputTimeoutMs / 1000) + "s)",
@@ -203,7 +211,7 @@ export function runClaude(opts: RunClaudeOptions): Promise<RunClaudeResult> {
         if (!settled) {
           settled = true;
           try {
-            proc.kill("SIGTERM");
+            killProc();
           } catch { /* ignore */ }
           resolve({
             text: accumulatedText || "(cancelled)",
