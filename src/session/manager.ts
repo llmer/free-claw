@@ -70,7 +70,7 @@ export function sendMessage(opts: SendMessageOptions): Promise<RunClaudeResult> 
         mcpConfigPath: overrides && "mcpConfigPath" in overrides ? (overrides.mcpConfigPath ?? undefined) : opts.mcpConfigPath,
         chatId: opts.chatId,
         onText: opts.onText,
-        appendSystemPrompt: (overrides?.isResume ?? isResume) ? undefined : appendSystemPrompt,
+        appendSystemPrompt,
       });
 
       if (opts.mcpConfigPath) {

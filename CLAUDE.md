@@ -32,10 +32,10 @@ claude -p --output-format stream-json --permission-mode dontAsk --allowedTools <
 
 Resume (follow-up in existing session):
 ```
-claude -p --output-format stream-json --permission-mode dontAsk --allowedTools <tools...> --add-dir <dirs...> --resume <session-id> "prompt"
+claude -p --output-format stream-json --permission-mode dontAsk --allowedTools <tools...> --add-dir <dirs...> --append-system-prompt <prompt> --resume <session-id> "prompt"
 ```
 
-**Critical:** On resume, `--model`, `--mcp-config`, and `--session-id` are NOT passed — the CLI ignores them. Only `--resume` + prompt. However, permission flags (`--permission-mode`, `--allowedTools`, `--add-dir`) MUST be passed on every invocation including resume — they are not inherited across sessions. The decision for session-specific flags is based on `session.messageCount > 0`.
+**Critical:** On resume, `--model`, `--mcp-config`, and `--session-id` are NOT passed — the CLI ignores them. Only `--resume` + prompt. However, permission flags (`--permission-mode`, `--allowedTools`, `--add-dir`) and `--append-system-prompt` MUST be passed on every invocation including resume — they are not inherited across sessions. The decision for session-specific flags is based on `session.messageCount > 0`.
 
 ### Per-chat queue
 

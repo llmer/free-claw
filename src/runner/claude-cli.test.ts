@@ -150,8 +150,32 @@ describe("buildArgs", () => {
     expect(args).toContain("--add-dir");
   });
 
+  it("includes --append-system-prompt on fresh session", () => {
+    const args = buildArgs({ ...baseOpts, appendSystemPrompt: "You are helpful." });
+    const idx = args.indexOf("--append-system-prompt");
+    expect(idx).toBeGreaterThan(-1);
+    expect(args[idx + 1]).toBe("You are helpful.");
+  });
+
+  it("includes --append-system-prompt on resume", () => {
+    const args = buildArgs({ ...baseOpts, isResume: true, appendSystemPrompt: "You are helpful." });
+    const idx = args.indexOf("--append-system-prompt");
+    expect(idx).toBeGreaterThan(-1);
+    expect(args[idx + 1]).toBe("You are helpful.");
+  });
+
+  it("omits --append-system-prompt when not provided", () => {
+    const args = buildArgs(baseOpts);
+    expect(args).not.toContain("--append-system-prompt");
+  });
+
   it("prompt is always last argument", () => {
     const args = buildArgs(baseOpts);
+    expect(args[args.length - 1]).toBe("hello");
+  });
+
+  it("prompt is last even with --append-system-prompt", () => {
+    const args = buildArgs({ ...baseOpts, appendSystemPrompt: "system" });
     expect(args[args.length - 1]).toBe("hello");
   });
 });

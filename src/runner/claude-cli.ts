@@ -56,7 +56,7 @@ export type RunClaudeOptions = {
   onEvent?: (event: StreamEvent) => void;
   /** AbortSignal to cancel the run externally. */
   signal?: AbortSignal;
-  /** System prompt to append (new sessions only, ignored on resume). */
+  /** System prompt to append on every invocation (including resume). */
   appendSystemPrompt?: string;
 };
 
@@ -114,9 +114,12 @@ export function buildArgs(opts: RunClaudeOptions): string[] {
     if (opts.mcpConfigPath) {
       args.push("--mcp-config", opts.mcpConfigPath);
     }
-    if (opts.appendSystemPrompt) {
-      args.push("--append-system-prompt", opts.appendSystemPrompt);
-    }
+  }
+
+  // System prompt passed on every invocation (including resume)
+  // so Claude retains capability knowledge across the session.
+  if (opts.appendSystemPrompt) {
+    args.push("--append-system-prompt", opts.appendSystemPrompt);
   }
 
   args.push(opts.prompt);
