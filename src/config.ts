@@ -42,6 +42,7 @@ export const config = {
   chromeUserDataDir: expandHome(process.env.CHROME_USER_DATA_DIR?.trim() || "~/.free-claw/chrome-profile"),
   chromePath: process.env.CHROME_PATH?.trim() || "",
   chromeHeadless: process.env.CHROME_HEADLESS?.trim()?.toLowerCase() !== "false",
+  maxBrowserTabs: Number(process.env.MAX_BROWSER_TABS) || 5,
 } as const;
 
 export type Config = typeof config;

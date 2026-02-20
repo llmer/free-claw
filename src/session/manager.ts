@@ -4,6 +4,7 @@ import { runClaude, type RunClaudeResult } from "../runner/claude-cli.js";
 import { cancelProcess, isRunning } from "../runner/process-manager.js";
 import { ensureWorkspace, loadIdentityFiles, isOnboardingComplete } from "../workspace/bootstrap.js";
 import { buildSystemPrompt } from "../workspace/system-prompt.js";
+import { trimBrowserTabs } from "../browser/tab-manager.js";
 import { getSession, putSession } from "./store.js";
 import { enqueue } from "./queue.js";
 import type { ChatSession } from "./types.js";
@@ -71,6 +72,10 @@ export function sendMessage(opts: SendMessageOptions): Promise<RunClaudeResult> 
         onText: opts.onText,
         appendSystemPrompt: (overrides?.isResume ?? isResume) ? undefined : appendSystemPrompt,
       });
+
+      if (opts.mcpConfigPath) {
+        await trimBrowserTabs();
+      }
 
       let result = await runClaude(buildRunOpts());
 

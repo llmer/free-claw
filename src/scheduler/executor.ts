@@ -5,6 +5,7 @@
 
 import type { Bot } from "grammy";
 import { config } from "../config.js";
+import { trimBrowserTabs } from "../browser/tab-manager.js";
 import { runClaude } from "../runner/claude-cli.js";
 import { chunkText } from "../telegram/streaming.js";
 import { ensureWorkspace, loadIdentityFiles } from "../workspace/bootstrap.js";
@@ -42,6 +43,10 @@ export async function executeScheduledJob(
     await ensureWorkspace(config.workspaceDir);
     const identity = await loadIdentityFiles(config.workspaceDir);
     const appendSystemPrompt = buildSystemPrompt(identity, config.workspaceDir);
+
+    if (deps.mcpConfigPath) {
+      await trimBrowserTabs();
+    }
 
     const result = await runClaude({
       prompt: job.prompt,

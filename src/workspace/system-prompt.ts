@@ -2,6 +2,7 @@
  * Build the --append-system-prompt string from identity files + memory instructions.
  */
 
+import { config } from "../config.js";
 import type { IdentityContent } from "./bootstrap.js";
 
 /**
@@ -38,6 +39,11 @@ You have persistent memory stored as files in your workspace (${workspaceDir}):
 
   sections.push(`# Communication
 You're talking to your human via Telegram. Keep responses concise — Telegram has a 4096 char limit.`);
+
+  if (config.enableBrowser) {
+    sections.push(`# Browser
+When using browser tools, check open tabs first with browser_tabs(action="list"). If the site you need is already open in an existing tab, select it with browser_tabs(action="select") instead of navigating to a new page. Close tabs you no longer need with browser_tabs(action="close").`);
+  }
 
   return sections.join("\n\n");
 }
