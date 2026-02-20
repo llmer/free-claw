@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { config } from "../config.js";
+import { getCdpEndpoint } from "./chrome-manager.js";
 
 export type McpConfig = {
   mcpServers: Record<string, {
@@ -22,7 +23,7 @@ export async function generateMcpConfig(): Promise<string | undefined> {
     mcpServers: {
       playwright: {
         command: "npx",
-        args: ["-y", "@playwright/mcp", "--headless"],
+        args: ["-y", "@playwright/mcp@latest", `--cdp-endpoint=${getCdpEndpoint()}`],
       },
     },
   };

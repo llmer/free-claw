@@ -2,6 +2,7 @@ import { execSync } from "node:child_process";
 import { config } from "./config.js";
 import { createBot } from "./telegram/bot.js";
 import { generateMcpConfig } from "./browser/mcp-config.js";
+import { ensureChromeRunning, startHealthCheck, stopHealthCheck, stopChrome } from "./browser/chrome-manager.js";
 import { SchedulerService } from "./scheduler/service.js";
 import { killAll as killAllProcesses } from "./runner/process-manager.js";
 
@@ -21,6 +22,17 @@ async function main() {
     console.error("[init] Failed to run 'claude --version' — is the CLI installed and on PATH?");
     console.error("[init]", err instanceof Error ? err.message : err);
     process.exit(1);
+  }
+
+  // Launch persistent Chrome for browser access
+  if (config.enableBrowser) {
+    try {
+      await ensureChromeRunning();
+      startHealthCheck();
+    } catch (err) {
+      console.warn("[init] Chrome failed to start — continuing without browser");
+      console.warn("[init]", err instanceof Error ? err.message : err);
+    }
   }
 
   // Generate MCP config for browser access
@@ -59,6 +71,10 @@ async function main() {
 
     // Stop the bot
     await fullBot.stop();
+
+    // Stop Chrome last (MCP servers may still be connected)
+    stopHealthCheck();
+    await stopChrome();
 
     console.log("[shutdown] Done.");
     process.exit(0);

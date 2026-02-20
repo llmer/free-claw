@@ -38,6 +38,10 @@ export const config = {
   defaultTimezone:
     process.env.DEFAULT_TIMEZONE?.trim() ||
     Intl.DateTimeFormat().resolvedOptions().timeZone,
+  chromeDebugPort: Number(process.env.CHROME_DEBUG_PORT) || 9222,
+  chromeUserDataDir: expandHome(process.env.CHROME_USER_DATA_DIR?.trim() || "~/.free-claw/chrome-profile"),
+  chromePath: process.env.CHROME_PATH?.trim() || "",
+  chromeHeadless: process.env.CHROME_HEADLESS?.trim()?.toLowerCase() !== "false",
 } as const;
 
 export type Config = typeof config;
