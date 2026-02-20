@@ -22,7 +22,7 @@ export function getCdpEndpoint(): string {
 /**
  * Detect a usable Chrome binary path.
  */
-function detectChromePath(): string {
+export function detectChromePath(): string {
   if (config.chromePath) {
     return config.chromePath;
   }
@@ -55,7 +55,7 @@ function detectChromePath(): string {
 /**
  * Check if Chrome is already listening on the debug port.
  */
-function isChromeRunning(port: number): Promise<boolean> {
+export function isChromeRunning(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const req = http.get(`http://127.0.0.1:${port}/json/version`, { timeout: 2_000 }, (res) => {
       let data = "";
