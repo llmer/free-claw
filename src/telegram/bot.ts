@@ -5,6 +5,7 @@ import { sendMessage, cancelChat } from "../session/manager.js";
 import { sanitizeForPrompt } from "../security/sanitize.js";
 import { checkAndLogInjection } from "../security/detect-injection.js";
 import { createTelegramStream, chunkText } from "./streaming.js";
+import { downloadTelegramPhoto } from "./image.js";
 import {
   handleStart,
   handleNew,
@@ -29,6 +30,60 @@ import {
   writeFeedback,
   getReactBackEmoji,
 } from "./feedback.js";
+
+/** Deliver a Claude result: final-edit the stream message or send chunked messages. */
+async function deliverResult(
+  result: { text: string; error?: string },
+  stream: ReturnType<typeof createTelegramStream>,
+  ctx: { reply: (text: string) => Promise<{ message_id: number }> },
+  botApi: Bot["api"],
+  chatId: number,
+  prompt: string,
+): Promise<void> {
+  await stream.stop();
+
+  const streamMsgId = stream.messageId();
+  let fullText = result.text.trim();
+
+  if (result.error && fullText === "(no output)") {
+    fullText = `⚠ ${result.error}`;
+  }
+
+  if (!fullText) {
+    if (!streamMsgId) {
+      await ctx.reply("(no response)");
+    }
+    return;
+  }
+
+  if (fullText.length <= 4096 && streamMsgId) {
+    try {
+      await botApi.editMessageText(chatId, streamMsgId, fullText, {
+        reply_markup: { inline_keyboard: [] },
+      });
+    } catch {
+      // Edit may fail if text is identical; that's fine
+    }
+    trackMessage(chatId, streamMsgId, { text: fullText, prompt });
+    return;
+  }
+
+  if (streamMsgId) {
+    try {
+      await botApi.deleteMessage(chatId, streamMsgId);
+    } catch {
+      // best-effort
+    }
+  }
+
+  const chunks = chunkText(fullText);
+  const sentIds: number[] = [];
+  for (const chunk of chunks) {
+    const sent = await ctx.reply(chunk);
+    sentIds.push(sent.message_id);
+  }
+  trackMessageIds(chatId, sentIds, { text: fullText, prompt });
+}
 
 export function createBot(opts: {
   mcpConfigPath?: string;
@@ -117,56 +172,7 @@ export function createBot(opts: {
         },
       });
 
-      // Stop streaming (final flush)
-      await stream.stop();
-
-      // Send the full response as chunked messages.
-      // If the stream message already contains most of the text, we skip re-sending.
-      const streamMsgId = stream.messageId();
-      let fullText = result.text.trim();
-
-      // Surface CLI errors so the user knows what went wrong
-      if (result.error && fullText === "(no output)") {
-        fullText = `⚠ ${result.error}`;
-      }
-
-      if (!fullText) {
-        if (!streamMsgId) {
-          await ctx.reply("(no response)");
-        }
-        return;
-      }
-
-      // If the full response fits in one message and we have a stream message,
-      // do a final edit to ensure completeness.
-      if (fullText.length <= 4096 && streamMsgId) {
-        try {
-          await bot.api.editMessageText(chatId, streamMsgId, fullText, {
-            reply_markup: { inline_keyboard: [] },
-          });
-        } catch {
-          // Edit may fail if text is identical; that's fine
-        }
-        trackMessage(chatId, streamMsgId, { text: fullText, prompt: sanitized });
-        return;
-      }
-
-      // For long responses, delete the stream preview and send chunked messages
-      if (streamMsgId) {
-        try {
-          await bot.api.deleteMessage(chatId, streamMsgId);
-        } catch {
-          // best-effort
-        }
-      }
-
-      const chunks = chunkText(fullText);
-      const sentIds: number[] = [];
-      for (const chunk of chunks) {
-        const sent = await ctx.reply(chunk);
-        sentIds.push(sent.message_id);
-      }
-      trackMessageIds(chatId, sentIds, { text: fullText, prompt: sanitized });
+      await deliverResult(result, stream, ctx, bot.api, chatId, sanitized);
     } catch (err) {
       await stream.clear();
       const msg = err instanceof Error ? err.message : String(err);
@@ -179,26 +185,53 @@ export function createBot(opts: {
     }
   });
 
-  // Handle photo messages (forward caption or description request)
+  // Handle photo messages — download image and let Claude read it
   bot.on("message:photo", async (ctx) => {
     const chatId = ctx.chat.id;
+    const photos = ctx.message.photo;
+    const largest = photos[photos.length - 1];
     const caption = ctx.message.caption ?? "Describe this image";
     const sanitized = sanitizeForPrompt(caption);
 
+    let cleanup: (() => Promise<void>) | undefined;
+
+    const stopButton = new InlineKeyboard().text("Stop", `stop:${chatId}`);
+    const stream = createTelegramStream({
+      api: bot.api,
+      chatId,
+      replyToMessageId: ctx.message.message_id,
+      replyMarkup: { inline_keyboard: stopButton.inline_keyboard },
+    });
+
     try {
+      const downloaded = await downloadTelegramPhoto(
+        config.telegramBotToken,
+        largest.file_id,
+      );
+      cleanup = downloaded.cleanup;
+
+      const prompt = `The user sent an image. First, use the Read tool to view this image file: ${downloaded.localPath}\n\nThen respond to the user's request: ${sanitized}`;
+
       const result = await sendMessage({
         chatId,
-        prompt: sanitized,
+        prompt,
         mcpConfigPath: opts.mcpConfigPath,
+        onText: (accumulatedText) => {
+          stream.update(accumulatedText);
+        },
       });
 
-      const chunks = chunkText(result.text.trim() || "(no response)");
-      for (const chunk of chunks) {
-        await ctx.reply(chunk);
-      }
+      await deliverResult(result, stream, ctx, bot.api, chatId, sanitized);
     } catch (err) {
+      await stream.clear();
       const msg = err instanceof Error ? err.message : String(err);
       await ctx.reply(`Error: ${msg}`);
+    } finally {
+      await cleanup?.();
+      if (opts.scheduler) {
+        await processInbox(chatId, config.workspaceDir, opts.scheduler, bot.api)
+          .catch(err => console.warn("[inbox] Failed:", err));
+      }
     }
   });
 

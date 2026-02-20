@@ -43,6 +43,7 @@ export const config = {
   chromePath: process.env.CHROME_PATH?.trim() || "",
   chromeHeadless: process.env.CHROME_HEADLESS?.trim()?.toLowerCase() !== "false",
   maxBrowserTabs: Number(process.env.MAX_BROWSER_TABS) || 5,
+  uploadsDir: expandHome(process.env.UPLOADS_DIR?.trim() || process.env.WORKSPACE_DIR?.trim() || "~/projects"),
 } as const;
 
 export type Config = typeof config;
