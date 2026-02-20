@@ -1,4 +1,5 @@
 import type { Bot } from "grammy";
+import type { InlineKeyboardButton, InlineKeyboardMarkup } from "grammy/types";
 
 const TELEGRAM_MAX_CHARS = 4096;
 const DEFAULT_THROTTLE_MS = 1500;
@@ -23,6 +24,7 @@ export function createTelegramStream(params: {
   replyToMessageId?: number;
   throttleMs?: number;
   minInitialChars?: number;
+  replyMarkup?: InlineKeyboardMarkup;
 }): TelegramStream {
   const throttleMs = Math.max(250, params.throttleMs ?? DEFAULT_THROTTLE_MS);
   const minInitialChars = params.minInitialChars ?? DEFAULT_MIN_INITIAL_CHARS;
@@ -93,15 +95,22 @@ export function createTelegramStream(params: {
 
     lastSentText = trimmed;
 
+    // During streaming, attach the inline keyboard; on final flush, clear it
+    const markup = isFinal
+      ? { reply_markup: { inline_keyboard: [] as InlineKeyboardButton[][] } }
+      : params.replyMarkup
+        ? { reply_markup: params.replyMarkup }
+        : {};
+
     try {
       if (streamMessageId !== undefined) {
-        await params.api.editMessageText(chatId, streamMessageId, trimmed);
+        await params.api.editMessageText(chatId, streamMessageId, trimmed, markup);
         return true;
       }
 
       const replyParams = params.replyToMessageId
-        ? { reply_to_message_id: params.replyToMessageId }
-        : {};
+        ? { reply_to_message_id: params.replyToMessageId, ...markup }
+        : { ...markup };
       const sent = await params.api.sendMessage(chatId, trimmed, replyParams);
       if (typeof sent?.message_id === "number") {
         streamMessageId = sent.message_id;

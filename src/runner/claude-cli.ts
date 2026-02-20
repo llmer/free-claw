@@ -183,8 +183,10 @@ export function runClaude(opts: RunClaudeOptions): Promise<RunClaudeResult> {
             sessionId = event.sessionId;
             break;
           case "text":
-            accumulatedText += event.text;
-            opts.onText?.(accumulatedText);
+            if (event.text) {
+              accumulatedText += event.text;
+              opts.onText?.(accumulatedText);
+            }
             break;
           case "result":
             if (event.sessionId) sessionId = event.sessionId;
@@ -219,7 +221,7 @@ export function runClaude(opts: RunClaudeOptions): Promise<RunClaudeResult> {
         const event = parseStreamLine(lineBuffer);
         if (event) {
           opts.onEvent?.(event);
-          if (event.type === "text") {
+          if (event.type === "text" && event.text) {
             accumulatedText += event.text;
           } else if (event.type === "result") {
             if (event.sessionId) sessionId = event.sessionId;

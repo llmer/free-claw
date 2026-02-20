@@ -1,7 +1,7 @@
-import { Bot } from "grammy";
+import { Bot, InlineKeyboard } from "grammy";
 import type { ReactionType } from "grammy/types";
 import { config } from "../config.js";
-import { sendMessage } from "../session/manager.js";
+import { sendMessage, cancelChat } from "../session/manager.js";
 import { sanitizeForPrompt } from "../security/sanitize.js";
 import { checkAndLogInjection } from "../security/detect-injection.js";
 import { createTelegramStream, chunkText } from "./streaming.js";
@@ -49,6 +49,16 @@ export function createBot(opts: {
     await next();
   });
 
+  // Inline stop button handler
+  bot.callbackQuery(/^stop:/, async (ctx) => {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    const killed = await cancelChat(chatId);
+    await ctx.answerCallbackQuery({
+      text: killed ? "Cancelled." : "Already finished.",
+    });
+  });
+
   // Register commands
   bot.command("start", handleStart);
   bot.command("new", handleNew);
@@ -87,11 +97,13 @@ export function createBot(opts: {
     const sanitized = sanitizeForPrompt(text);
     checkAndLogInjection(sanitized, `telegram:${chatId}`);
 
-    // Create streaming handler
+    // Create streaming handler with inline stop button
+    const stopButton = new InlineKeyboard().text("Stop", `stop:${chatId}`);
     const stream = createTelegramStream({
       api: bot.api,
       chatId,
       replyToMessageId: ctx.message.message_id,
+      replyMarkup: { inline_keyboard: stopButton.inline_keyboard },
     });
 
     try {
@@ -128,7 +140,9 @@ export function createBot(opts: {
       // do a final edit to ensure completeness.
       if (fullText.length <= 4096 && streamMsgId) {
         try {
-          await bot.api.editMessageText(chatId, streamMsgId, fullText);
+          await bot.api.editMessageText(chatId, streamMsgId, fullText, {
+            reply_markup: { inline_keyboard: [] },
+          });
         } catch {
           // Edit may fail if text is identical; that's fine
         }
