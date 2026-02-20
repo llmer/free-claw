@@ -164,6 +164,37 @@ export class SchedulerService {
   }
 
   /**
+   * Remove a job by name (case-insensitive substring match), scoped to chatId.
+   */
+  async removeJobByName(chatId: number, name: string): Promise<ScheduledJob | null> {
+    const needle = name.toLowerCase();
+    const idx = this.store.jobs.findIndex(
+      (j) => j.chatId === chatId && j.name.toLowerCase().includes(needle),
+    );
+    if (idx < 0) return null;
+    const [removed] = this.store.jobs.splice(idx, 1);
+    await this.persist();
+    this.armTimer();
+    return removed;
+  }
+
+  /**
+   * Disable a job by name (case-insensitive substring match), scoped to chatId.
+   */
+  async disableJobByName(chatId: number, name: string): Promise<ScheduledJob | null> {
+    const needle = name.toLowerCase();
+    const job = this.store.jobs.find(
+      (j) => j.chatId === chatId && j.name.toLowerCase().includes(needle),
+    );
+    if (!job) return null;
+    job.enabled = false;
+    job.state.nextRunAtMs = undefined;
+    await this.persist();
+    this.armTimer();
+    return job;
+  }
+
+  /**
    * List jobs for a specific chat (or all if chatId is undefined).
    */
   listJobs(chatId?: number): ScheduledJob[] {

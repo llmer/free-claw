@@ -11,13 +11,10 @@ import { parseRecurringPattern } from "./parse-time.js";
 import type { SchedulerService } from "./service.js";
 import type { CronSchedule } from "./types.js";
 
-export type InboxEntry = {
-  action: "create";
-  name?: string;
-  prompt: string;
-  schedule: string;
-  expiresAt?: string;
-};
+export type InboxEntry =
+  | { action: "create"; name?: string; prompt: string; schedule: string; expiresAt?: string; duration?: string }
+  | { action: "delete"; name: string }
+  | { action: "disable"; name: string };
 
 function looksRecurring(schedule: string): boolean {
   const s = schedule.toLowerCase();
@@ -33,6 +30,30 @@ function parseExpiresAt(raw: string): Date | null {
   // Fall back to chrono-node natural language
   const parsed = chrono.parseDate(raw, new Date(), { forwardDate: true });
   return parsed ?? null;
+}
+
+const DURATION_RE = /^\s*(\d+)\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|week|weeks)\s*$/i;
+
+const DURATION_MULTIPLIERS: Record<string, number> = {
+  s: 1_000, sec: 1_000, secs: 1_000, second: 1_000, seconds: 1_000,
+  m: 60_000, min: 60_000, mins: 60_000, minute: 60_000, minutes: 60_000,
+  h: 3_600_000, hr: 3_600_000, hrs: 3_600_000, hour: 3_600_000, hours: 3_600_000,
+  d: 86_400_000, day: 86_400_000, days: 86_400_000,
+  w: 604_800_000, week: 604_800_000, weeks: 604_800_000,
+};
+
+/**
+ * Parse a human-readable duration string (e.g., "5 minutes", "2 hours") into milliseconds.
+ * Returns null if the string cannot be parsed.
+ */
+export function parseDuration(raw: string): number | null {
+  const match = raw.match(DURATION_RE);
+  if (!match) return null;
+  const value = Number.parseInt(match[1], 10);
+  const unit = match[2].toLowerCase();
+  const multiplier = DURATION_MULTIPLIERS[unit];
+  if (!multiplier || value <= 0) return null;
+  return value * multiplier;
 }
 
 function parseSchedule(scheduleStr: string, tz?: string): CronSchedule | null {
@@ -52,9 +73,16 @@ function parseSchedule(scheduleStr: string, tz?: string): CronSchedule | null {
 function validateEntry(entry: unknown): entry is InboxEntry {
   if (typeof entry !== "object" || entry === null) return false;
   const e = entry as Record<string, unknown>;
-  return e.action === "create"
-    && typeof e.prompt === "string" && e.prompt.trim() !== ""
-    && typeof e.schedule === "string" && e.schedule.trim() !== "";
+
+  if (e.action === "delete" || e.action === "disable") {
+    return typeof e.name === "string" && e.name.trim() !== "";
+  }
+
+  if (e.action !== "create") return false;
+  if (typeof e.prompt !== "string" || e.prompt.trim() === "") return false;
+  if (typeof e.schedule !== "string" || e.schedule.trim() === "") return false;
+  if (e.duration !== undefined && typeof e.duration !== "string") return false;
+  return true;
 }
 
 /**
@@ -96,6 +124,26 @@ export async function processInbox(
         continue;
       }
 
+      if (entry.action === "delete") {
+        const removed = await scheduler.removeJobByName(chatId, entry.name);
+        if (removed) {
+          await api.sendMessage(chatId, `Deleted scheduled task: "${removed.name}"`).catch(() => {});
+        } else {
+          await api.sendMessage(chatId, `No scheduled task found matching "${entry.name}".`).catch(() => {});
+        }
+        continue;
+      }
+
+      if (entry.action === "disable") {
+        const disabled = await scheduler.disableJobByName(chatId, entry.name);
+        if (disabled) {
+          await api.sendMessage(chatId, `Disabled scheduled task: "${disabled.name}"`).catch(() => {});
+        } else {
+          await api.sendMessage(chatId, `No scheduled task found matching "${entry.name}".`).catch(() => {});
+        }
+        continue;
+      }
+
       const tz = scheduler.getTimezone(chatId);
       const schedule = parseSchedule(entry.schedule, tz);
       if (!schedule) {
@@ -107,7 +155,15 @@ export async function processInbox(
       }
 
       let expiresAt: string | undefined;
-      if (entry.expiresAt) {
+      if (entry.duration) {
+        const durationMs = parseDuration(entry.duration);
+        if (durationMs) {
+          expiresAt = new Date(Date.now() + durationMs).toISOString();
+        } else {
+          console.warn(`[inbox] Could not parse duration: "${entry.duration}"`);
+        }
+      }
+      if (!expiresAt && entry.expiresAt) {
         const parsed = parseExpiresAt(entry.expiresAt);
         if (!parsed) {
           console.warn(`[inbox] Could not parse expiresAt: "${entry.expiresAt}"`);
