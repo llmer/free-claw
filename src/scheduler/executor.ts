@@ -27,7 +27,7 @@ export async function executeScheduledJob(
   job: ScheduledJob,
   deps: ExecutorDeps,
 ): Promise<{ status: "ok" | "error"; error?: string; text?: string }> {
-  const sessionId = `scheduled-${job.id}`;
+  const sessionId = crypto.randomUUID();
 
   // Notify user that the job is running
   try {
