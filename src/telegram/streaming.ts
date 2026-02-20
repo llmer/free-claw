@@ -25,6 +25,8 @@ export function createTelegramStream(params: {
   throttleMs?: number;
   minInitialChars?: number;
   replyMarkup?: InlineKeyboardMarkup;
+  /** If set, immediately send this text as the first message (bypasses minInitialChars). */
+  initialText?: string;
 }): TelegramStream {
   const throttleMs = Math.max(250, params.throttleMs ?? DEFAULT_THROTTLE_MS);
   const minInitialChars = params.minInitialChars ?? DEFAULT_MIN_INITIAL_CHARS;
@@ -45,6 +47,27 @@ export function createTelegramStream(params: {
   };
   sendTyping();
   const typingTimer = setInterval(sendTyping, TYPING_INTERVAL_MS);
+
+  // Send initial placeholder message immediately (with stop button)
+  if (params.initialText) {
+    const markup = params.replyMarkup ? { reply_markup: params.replyMarkup } : {};
+    const replyParams = params.replyToMessageId
+      ? { reply_to_message_id: params.replyToMessageId, ...markup }
+      : { ...markup };
+    // Fire-and-forget but capture the message ID
+    inFlight = params.api
+      .sendMessage(chatId, params.initialText, replyParams)
+      .then((sent) => {
+        if (typeof sent?.message_id === "number") {
+          streamMessageId = sent.message_id;
+          lastSentText = params.initialText!;
+        }
+        return true;
+      })
+      .catch(() => {
+        return false;
+      });
+  }
 
   // Activity indicator: when text stops changing but process is still running,
   // append a visual indicator to the message so the user knows we're still working.
@@ -125,6 +148,9 @@ export function createTelegramStream(params: {
   };
 
   const doFlush = async () => {
+    // Wait for any in-flight operation (e.g. initial placeholder send) to finish
+    // so that streamMessageId is set before we try to edit
+    if (inFlight) await inFlight;
     if (!pendingText) return;
     const text = pendingText;
     inFlight = sendOrEdit(text);

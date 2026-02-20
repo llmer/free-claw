@@ -91,6 +91,10 @@ export function createBot(opts: {
 }): Bot {
   const bot = new Bot(config.telegramBotToken);
 
+  bot.catch((err) => {
+    console.error("[bot] Unhandled error in middleware:", err.error);
+  });
+
   // Access control middleware
   bot.use(async (ctx, next) => {
     const userId = ctx.from?.id;
@@ -110,9 +114,13 @@ export function createBot(opts: {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
     const killed = await cancelChat(chatId);
-    await ctx.answerCallbackQuery({
-      text: killed ? "Cancelled." : "Already finished.",
-    });
+    try {
+      await ctx.answerCallbackQuery({
+        text: killed ? "Cancelled." : "Already finished.",
+      });
+    } catch {
+      // Callback query may have expired (~30s Telegram timeout) — ignore
+    }
   });
 
   // Register commands
@@ -153,13 +161,14 @@ export function createBot(opts: {
     const sanitized = sanitizeForPrompt(text);
     checkAndLogInjection(sanitized, `telegram:${chatId}`);
 
-    // Create streaming handler with inline stop button
+    // Create streaming handler with inline stop button and immediate placeholder
     const stopButton = new InlineKeyboard().text("Stop", `stop:${chatId}`);
     const stream = createTelegramStream({
       api: bot.api,
       chatId,
       replyToMessageId: ctx.message.message_id,
       replyMarkup: { inline_keyboard: stopButton.inline_keyboard },
+      initialText: "⏳ Working...",
     });
 
     try {
@@ -201,6 +210,7 @@ export function createBot(opts: {
       chatId,
       replyToMessageId: ctx.message.message_id,
       replyMarkup: { inline_keyboard: stopButton.inline_keyboard },
+      initialText: "⏳ Working...",
     });
 
     try {
