@@ -1,5 +1,6 @@
 import type { Bot } from "grammy";
 import type { InlineKeyboardButton, InlineKeyboardMarkup } from "grammy/types";
+import { markdownToTelegramHtml, isTelegramParseError } from "./format.js";
 
 const TELEGRAM_MAX_CHARS = 4096;
 const DEFAULT_THROTTLE_MS = 1500;
@@ -37,6 +38,7 @@ export function createTelegramStream(params: {
   let pendingText = "";
   let stopped = false;
   let isFinal = false;
+  let htmlFailed = false;
   let throttleTimer: ReturnType<typeof setTimeout> | null = null;
   let inFlight: Promise<boolean | undefined> | null = null;
 
@@ -125,23 +127,37 @@ export function createTelegramStream(params: {
         ? { reply_markup: params.replyMarkup }
         : {};
 
-    try {
+    const attempt = async (content: string, parseMode?: "HTML") => {
+      const pmOpts = parseMode ? { parse_mode: parseMode } as const : {};
       if (streamMessageId !== undefined) {
-        await params.api.editMessageText(chatId, streamMessageId, trimmed, markup);
+        await params.api.editMessageText(chatId, streamMessageId, content, { ...markup, ...pmOpts });
         return true;
       }
-
-      const replyParams = params.replyToMessageId
-        ? { reply_to_message_id: params.replyToMessageId, ...markup }
-        : { ...markup };
-      const sent = await params.api.sendMessage(chatId, trimmed, replyParams);
+      const base = params.replyToMessageId
+        ? { reply_to_message_id: params.replyToMessageId }
+        : {};
+      const sent = await params.api.sendMessage(chatId, content, { ...base, ...markup, ...pmOpts });
       if (typeof sent?.message_id === "number") {
         streamMessageId = sent.message_id;
         return true;
       }
-      stopped = true;
       return false;
-    } catch {
+    };
+
+    try {
+      if (htmlFailed) {
+        return await attempt(trimmed);
+      }
+      return await attempt(markdownToTelegramHtml(trimmed), "HTML");
+    } catch (err) {
+      if (!htmlFailed && isTelegramParseError(err)) {
+        htmlFailed = true;
+        try {
+          return await attempt(trimmed);
+        } catch {
+          // fall through
+        }
+      }
       stopped = true;
       return false;
     }

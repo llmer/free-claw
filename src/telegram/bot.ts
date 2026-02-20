@@ -5,6 +5,7 @@ import { sendMessage, cancelChat } from "../session/manager.js";
 import { sanitizeForPrompt } from "../security/sanitize.js";
 import { checkAndLogInjection } from "../security/detect-injection.js";
 import { createTelegramStream, chunkText } from "./streaming.js";
+import { markdownToTelegramHtml, isTelegramParseError } from "./format.js";
 import { downloadTelegramPhoto } from "./image.js";
 import {
   handleStart,
@@ -58,11 +59,23 @@ async function deliverResult(
 
   if (fullText.length <= 4096 && streamMsgId) {
     try {
-      await botApi.editMessageText(chatId, streamMsgId, fullText, {
+      const html = markdownToTelegramHtml(fullText);
+      await botApi.editMessageText(chatId, streamMsgId, html, {
+        parse_mode: "HTML",
         reply_markup: { inline_keyboard: [] },
       });
-    } catch {
-      // Edit may fail if text is identical; that's fine
+    } catch (err) {
+      // Fallback to plain text on parse error
+      if (isTelegramParseError(err)) {
+        try {
+          await botApi.editMessageText(chatId, streamMsgId, fullText, {
+            reply_markup: { inline_keyboard: [] },
+          });
+        } catch {
+          // Edit may fail if text is identical; that's fine
+        }
+      }
+      // else: Edit may fail if text is identical; that's fine
     }
     trackMessage(chatId, streamMsgId, { text: fullText, prompt });
     return;
@@ -79,7 +92,13 @@ async function deliverResult(
   const chunks = chunkText(fullText);
   const sentIds: number[] = [];
   for (const chunk of chunks) {
-    const sent = await ctx.reply(chunk);
+    let sent: { message_id: number };
+    try {
+      const html = markdownToTelegramHtml(chunk);
+      sent = await botApi.sendMessage(chatId, html, { parse_mode: "HTML" });
+    } catch {
+      sent = await ctx.reply(chunk);
+    }
     sentIds.push(sent.message_id);
   }
   trackMessageIds(chatId, sentIds, { text: fullText, prompt });

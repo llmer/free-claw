@@ -8,6 +8,7 @@ import { config } from "../config.js";
 import { trimBrowserTabs } from "../browser/tab-manager.js";
 import { runClaude } from "../runner/claude-cli.js";
 import { chunkText } from "../telegram/streaming.js";
+import { markdownToTelegramHtml, isTelegramParseError } from "../telegram/format.js";
 import { ensureWorkspace, loadIdentityFiles } from "../workspace/bootstrap.js";
 import { buildSystemPrompt } from "../workspace/system-prompt.js";
 import type { ScheduledJob } from "./types.js";
@@ -63,9 +64,18 @@ export async function executeScheduledJob(
     const chunks = chunkText(text);
     for (const chunk of chunks) {
       try {
-        await deps.api.sendMessage(job.chatId, chunk);
+        const html = markdownToTelegramHtml(chunk);
+        await deps.api.sendMessage(job.chatId, html, { parse_mode: "HTML" });
       } catch (err) {
-        console.warn(`[scheduler] Failed to deliver result chunk for job ${job.id}:`, err);
+        if (isTelegramParseError(err)) {
+          try {
+            await deps.api.sendMessage(job.chatId, chunk);
+          } catch (err2) {
+            console.warn(`[scheduler] Failed to deliver result chunk for job ${job.id}:`, err2);
+          }
+        } else {
+          console.warn(`[scheduler] Failed to deliver result chunk for job ${job.id}:`, err);
+        }
       }
     }
 
