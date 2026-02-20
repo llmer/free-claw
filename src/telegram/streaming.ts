@@ -34,7 +34,7 @@ export function createTelegramStream(params: {
   let stopped = false;
   let isFinal = false;
   let throttleTimer: ReturnType<typeof setTimeout> | null = null;
-  let inFlight: Promise<boolean | void> | null = null;
+  let inFlight: Promise<boolean | undefined> | null = null;
 
   // Send "typing" indicator immediately and refresh every 4s (expires after ~5s)
   const TYPING_INTERVAL_MS = 4_000;

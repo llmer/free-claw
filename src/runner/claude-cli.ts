@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process";
-import path from "node:path";
 import { config } from "../config.js";
 import { parseStreamLine, type StreamEvent } from "./stream-parser.js";
 import { trackProcess, untrackProcess } from "./process-manager.js";
