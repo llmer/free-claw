@@ -86,6 +86,7 @@ async function main() {
   // Start polling
   console.log("[init] Bot starting...");
   await fullBot.start({
+    allowed_updates: ["message", "callback_query", "message_reaction"],
     onStart: (botInfo) => {
       console.log(`[init] Bot @${botInfo.username} is running!`);
     },

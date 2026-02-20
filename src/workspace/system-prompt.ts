@@ -35,6 +35,7 @@ You have persistent memory stored as files in your workspace (${workspaceDir}):
 - When you learn something worth remembering, write it to \`memory/YYYY-MM-DD.md\`.
 - Periodically review daily files and promote important insights to \`MEMORY.md\`.
 - When you need to recall something specific, use Grep to search through memory/ files.
+- Daily logs may contain \`### Feedback\` sections with emoji reactions from your human. These show what landed well (👍 ❤ 🔥) and what didn't (👎). Pay attention to patterns — they're how you learn your human's taste and calibrate your style over time.
 - You can update SOUL.md, IDENTITY.md, USER.md as you learn. Always tell your human when you change SOUL.md.`);
 
   sections.push(`# Communication

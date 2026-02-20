@@ -1,5 +1,6 @@
 import { Bot } from "grammy";
-import { config, type Config } from "../config.js";
+import type { ReactionType } from "grammy/types";
+import { config } from "../config.js";
 import { sendMessage } from "../session/manager.js";
 import { sanitizeForPrompt } from "../security/sanitize.js";
 import { checkAndLogInjection } from "../security/detect-injection.js";
@@ -20,6 +21,13 @@ import { createOnboardingComposer, handleOnboardingText } from "./ui/onboarding.
 import { createJobsComposer } from "./ui/jobs-ui.js";
 import { createMemoryComposer } from "./ui/memory-ui.js";
 import { createIdentityComposer } from "./ui/identity-ui.js";
+import {
+  trackMessage,
+  trackMessageIds,
+  getTracked,
+  writeFeedback,
+  getReactBackEmoji,
+} from "./feedback.js";
 
 export function createBot(opts: {
   mcpConfigPath?: string;
@@ -124,6 +132,7 @@ export function createBot(opts: {
         } catch {
           // Edit may fail if text is identical; that's fine
         }
+        trackMessage(chatId, streamMsgId, { text: fullText, prompt: sanitized });
         return;
       }
 
@@ -137,9 +146,12 @@ export function createBot(opts: {
       }
 
       const chunks = chunkText(fullText);
+      const sentIds: number[] = [];
       for (const chunk of chunks) {
-        await ctx.reply(chunk);
+        const sent = await ctx.reply(chunk);
+        sentIds.push(sent.message_id);
       }
+      trackMessageIds(chatId, sentIds, { text: fullText, prompt: sanitized });
     } catch (err) {
       await stream.clear();
       const msg = err instanceof Error ? err.message : String(err);
@@ -167,6 +179,42 @@ export function createBot(opts: {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       await ctx.reply(`Error: ${msg}`);
+    }
+  });
+
+  // Handle emoji reactions — feedback loop for growth
+  bot.on("message_reaction", async (ctx) => {
+    const mr = ctx.messageReaction;
+    if (!mr) return;
+
+    const { emojiAdded } = ctx.reactions();
+    if (emojiAdded.length === 0) return;
+
+    const chatId = mr.chat.id;
+    const messageId = mr.message_id;
+    const emoji = emojiAdded[0];
+
+    // Look up what we said
+    const tracked = getTracked(chatId, messageId);
+
+    // Write to daily log
+    await writeFeedback({
+      emoji,
+      snippet: tracked?.text ?? "(earlier response)",
+      context: tracked?.prompt ?? "",
+      timestamp: new Date(),
+    }).catch((err) => {
+      console.warn("[feedback] Failed to write feedback:", err);
+    });
+
+    // React back (if appropriate)
+    const reactEmoji = await getReactBackEmoji(emoji);
+    if (reactEmoji) {
+      await ctx.api
+        .setMessageReaction(chatId, messageId, [
+          { type: "emoji", emoji: reactEmoji } as ReactionType,
+        ])
+        .catch(() => {});
     }
   });
 
