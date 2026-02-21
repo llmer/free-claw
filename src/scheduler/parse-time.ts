@@ -15,6 +15,38 @@ import type { CronSchedule } from "./types.js";
 export function parseRecurringPattern(input: string, tz?: string): CronSchedule | null {
   const text = input.toLowerCase().trim();
 
+  // "every N hours from Xam to Ypm" → windowed interval as cron hour list
+  const windowMatch = text.match(
+    /^every\s+(\d+)\s*(?:hours?|hrs?|h)\s+(?:from|between)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s+(?:to|and|until|-)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i,
+  );
+  if (windowMatch) {
+    const step = parseInt(windowMatch[1], 10);
+    let startHour = parseInt(windowMatch[2], 10);
+    const startMinute = windowMatch[3] ? parseInt(windowMatch[3], 10) : 0;
+    const startAmPm = windowMatch[4]?.toLowerCase();
+    let endHour = parseInt(windowMatch[5], 10);
+    const endAmPm = windowMatch[7]?.toLowerCase();
+
+    if (startAmPm === "pm" && startHour < 12) startHour += 12;
+    if (startAmPm === "am" && startHour === 12) startHour = 0;
+    if (endAmPm === "pm" && endHour < 12) endHour += 12;
+    if (endAmPm === "am" && endHour === 12) endHour = 0;
+
+    if (startHour >= endHour) {
+      throw new Error(
+        `Invalid window: start hour (${startHour}) must be before end hour (${endHour})`,
+      );
+    }
+
+    const hours: number[] = [];
+    for (let h = startHour; h <= endHour; h += step) {
+      hours.push(h);
+    }
+    if (hours.length === 0) hours.push(startHour);
+
+    return { kind: "cron", expr: `${startMinute} ${hours.join(",")} * * *`, tz };
+  }
+
   // "every N minutes/hours" → fixed interval
   const intervalMatch = text.match(
     /^(?:every\s+)?(\d+)\s*(minutes?|mins?|m|hours?|hrs?|h|seconds?|secs?|s)$/,
@@ -67,12 +99,7 @@ export function parseRecurringPattern(input: string, tz?: string): CronSchedule 
     return { kind: "cron", expr: `${minute} ${h} * * *`, tz };
   }
 
-  // "every day at X"
-  if (/(?:every\s+)?day/.test(text) && hour !== undefined) {
-    return { kind: "cron", expr: `${minute} ${hour} * * *`, tz };
-  }
-
-  // "every weekday at X"
+  // "every weekday at X" (must be before "day" check)
   if (/weekday/.test(text) && hour !== undefined) {
     return { kind: "cron", expr: `${minute} ${hour} * * 1-5`, tz };
   }
@@ -82,7 +109,7 @@ export function parseRecurringPattern(input: string, tz?: string): CronSchedule 
     return { kind: "cron", expr: `${minute} ${hour} * * 0,6`, tz };
   }
 
-  // "every Monday/Tuesday/... at X"
+  // "every Monday/Tuesday/... at X" (must be before "day" check)
   const dayNames: Record<string, string> = {
     sunday: "0", monday: "1", tuesday: "2", wednesday: "3",
     thursday: "4", friday: "5", saturday: "6",
@@ -93,6 +120,11 @@ export function parseRecurringPattern(input: string, tz?: string): CronSchedule 
     if (text.includes(name) && hour !== undefined) {
       return { kind: "cron", expr: `${minute} ${hour} * * ${dow}`, tz };
     }
+  }
+
+  // "every day at X" (after weekday/weekend/named-day checks)
+  if (/(?:every\s+)?day/.test(text) && hour !== undefined) {
+    return { kind: "cron", expr: `${minute} ${hour} * * *`, tz };
   }
 
   // If we have a time but no day pattern, treat as daily

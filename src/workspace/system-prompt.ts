@@ -58,7 +58,7 @@ Format:
 }]
 \`\`\`
 
-- \`schedule\`: "every 2 hours", "every morning at 9am", "every weekday at 8:30am", "tomorrow at 3pm", etc.
+- \`schedule\`: "every 2 hours", "every 2 hours from 8am to 5pm", "every morning at 9am", "every weekday at 8:30am", "tomorrow at 3pm", etc.
 - \`duration\`: (optional) How long the task should remain active from now, e.g. "5 minutes", "2 hours", "3 days", "1 week". Preferred for short time windows — the system computes the exact expiry for you. Takes precedence over \`expiresAt\` if both are set.
 - \`expiresAt\`: (optional) ISO date or natural language date when recurring tasks auto-disable. Use for specific calendar dates. For relative durations, use \`duration\` instead.
 - \`prompt\`: Full instructions for a fresh Claude session. Be specific — each execution starts with no context. Include what to check, where to write results, and any formatting preferences. The session has full workspace + browser/MCP access.
